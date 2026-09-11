@@ -1,1 +1,152 @@
 
+#include <TFT_eSPI.h>
+
+TFT_eSPI tft = TFT_eSPI();
+
+int leftValue = 0;
+int rightValue = 0;
+
+float leftY = 120;
+float rightY = 120;
+
+String leftBuffer = "";
+String rightBuffer = "";
+
+char currentSide = ' ';
+
+int ballX = 240;
+int ballY = 160;
+
+int ballDX = 3;
+int ballDY = 2;
+
+int leftScore = 0;
+int rightScore = 0;
+
+void drawScores()
+{
+tft.fillRect(180, 0, 140, 30, TFT_BLACK);
+
+tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+tft.setTextSize(2);
+
+tft.drawNumber(leftScore, 190, 5);
+tft.drawString(":", 235, 5);
+tft.drawNumber(rightScore, 260, 5);
+}
+
+void resetBall()
+{
+ballX = 240;
+ballY = 160;
+
+ballDX = -ballDX;
+}
+
+void setup()
+{
+pinMode(27, OUTPUT);
+digitalWrite(27, HIGH);
+
+Serial.begin(115200);
+
+tft.init();
+tft.setRotation(1);
+
+tft.fillScreen(TFT_BLACK);
+
+drawScores();
+}
+
+void loop()
+{
+while (Serial.available())
+{
+char c = Serial.read();
+
+if(c == 'L')
+{
+currentSide = 'L';
+leftBuffer = "";
+}
+else if(c == 'R')
+{
+currentSide = 'R';
+rightBuffer = "";
+}
+else if(c >= '0' && c <= '9')
+{
+if(currentSide == 'L')
+{
+leftBuffer += c;
+
+if(leftBuffer.length() == 3)
+{
+leftValue = constrain(leftBuffer.toInt(),0,255);
+}
+}
+
+if(currentSide == 'R')
+{
+rightBuffer += c;
+
+if(rightBuffer.length() == 3)
+{
+rightValue = constrain(rightBuffer.toInt(),0,255);
+}
+}
+}
+}
+
+// FULL POT RANGE
+float targetLeftY = map(leftValue ,0,255,10,250);
+float targetRightY = map(rightValue,0,255,10,250);
+
+leftY += (targetLeftY - leftY) * 0.90;
+rightY += (targetRightY - rightY) * 0.90;
+
+ballX += ballDX;
+ballY += ballDY;
+
+if(ballY <= 0 || ballY >= 312)
+ballDY = -ballDY;
+
+if(ballX <= 20 &&
+ballY >= leftY &&
+ballY <= leftY + 60)
+{
+ballDX = -ballDX;
+}
+
+if(ballX >= 450 &&
+ballY >= rightY &&
+ballY <= rightY + 60)
+{
+ballDX = -ballDX;
+}
+
+if(ballX < 0)
+{
+rightScore++;
+drawScores();
+resetBall();
+}
+
+if(ballX > 479)
+{
+leftScore++;
+drawScores();
+resetBall();
+}
+
+tft.fillScreen(TFT_BLACK);
+
+drawScores();
+
+tft.fillRect(10, (int)leftY, 10, 60, TFT_WHITE);
+tft.fillRect(460, (int)rightY, 10, 60, TFT_WHITE);
+
+tft.fillRect(ballX, ballY, 8, 8, TFT_GREEN);
+
+delay(10);
+}
