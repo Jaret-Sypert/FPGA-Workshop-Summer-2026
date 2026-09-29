@@ -1,0 +1,99 @@
+module arty_s7_patterns (
+    input  logic       CLK100MHZ,   // 100 MHz onboard clock
+    input  logic [3:0] sw,          // 4 slide switches for patterns
+    input  logic [3:0] btn,         // 4 push buttons for speed control
+    output logic [3:0] led          // 4 onboard green LEDs
+);
+
+    // -----------------------------------------------------------------
+    // 1. Clock Divider & Speed Control based on Buttons
+    // -----------------------------------------------------------------
+    logic [31:0] clk_counter = 0;
+    logic [31:0] speed_limit;
+
+    // Map buttons to different tick thresholds (speeds)
+    // Pressing different buttons changes the speed limit of the pattern ticker.
+    always_comb begin
+        case (btn)
+            4'b0001: speed_limit = 32'd10_000_000; // Slow (~100ms ticks)
+            4'b0010: speed_limit = 32'd5_000_000;  // Medium-Slow
+            4'b0100: speed_limit = 32'd2_000_000;  // Medium-Fast
+            4'b1000: speed_limit = 32'd500_000;   // Fast (~5ms ticks)
+            default: speed_limit = 32'd25_000_000; // Default speed (~250ms ticks)
+        endcase
+    end
+
+    logic tick = 0;
+
+    always_ff @(posedge CLK100MHZ) begin
+        if (clk_counter >= speed_limit) begin
+            clk_counter <= 0;
+            tick <= 1;
+        end else begin
+            clk_counter <= clk_counter + 1;
+            tick <= 0;
+        end
+    end
+
+    // -----------------------------------------------------------------
+    // 2. Pattern Generators
+    // -----------------------------------------------------------------
+   
+    // Pattern 0: Binary Counter
+    logic [3:0] pat_counter = 4'h0;
+    always_ff @(posedge CLK100MHZ) begin
+        if (tick) begin
+            pat_counter <= pat_counter + 1;
+        end
+    end
+
+    // Pattern 1: Shift Register / Chaser (Knight Rider style bounce or rotate)
+    logic [3:0] pat_shift = 4'b0001;
+    always_ff @(posedge CLK100MHZ) begin
+        if (tick) begin
+            pat_shift <= {pat_shift[2:0], pat_shift[3]};
+        end
+    end
+
+    // Pattern 2: Walking 1s (0001 -> 0010 -> 0100 -> 1000)
+    logic [1:0] walk_idx = 0;
+    always_ff @(posedge CLK100MHZ) begin
+        if (tick) begin
+            walk_idx <= walk_idx + 1;
+        end
+    end
+    logic [3:0] pat_walk;
+    always_comb begin
+        case (walk_idx)
+            2'd0:    pat_walk = 4'b0001;
+            2'd1:    pat_walk = 4'b0010;
+            2'd2:    pat_walk = 4'b0100;
+            2'd3:    pat_walk = 4'b1000;
+            default: pat_walk = 4'b0001;
+        endcase
+    end
+
+    // Pattern 3: Alternate Flasher
+    logic pat_alt = 0;
+    always_ff @(posedge CLK100MHZ) begin
+        if (tick) begin
+            pat_alt <= ~pat_alt;
+        end
+    end
+    logic [3:0] pat_flash;
+    assign pat_flash = pat_alt ? 4'b1010 : 4'b0101;
+
+    // -----------------------------------------------------------------
+    // 3. Switch Multiplexer (Select Pattern via sw[3:0])
+    // -----------------------------------------------------------------
+    always_comb begin
+        casez (sw)
+            4'b???1: led = pat_counter; // Switch 0 down/up combo -> Counter
+            4'b??1?: led = pat_shift;   // Switch 1 active -> Shifter
+            4'b?1??: led = pat_walk;    // Switch 2 active -> Walker
+            4'b1???: led = pat_flash;   // Switch 3 active -> Flasher
+            default: led = pat_counter; // Fallback
+        endcase
+    end
+
+endmodule
